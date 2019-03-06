@@ -1,10 +1,19 @@
 """ Tests for OAuth Dispatch's jwt module. """
 import itertools
 from datetime import timedelta
+from uuid import uuid4
 
 import ddt
+from django.conf import settings
 from django.test import TestCase
 from django.utils.timezone import now
+
+from enterprise.models import (
+    EnterpriseCustomer,
+    EnterpriseCustomerUser,
+    SystemWideEnterpriseRole,
+    SystemWideEnterpriseUserRoleAssignment,
+)
 
 from openedx.core.djangoapps.oauth_dispatch import jwt as jwt_api
 from openedx.core.djangoapps.oauth_dispatch.adapters import DOTAdapter, DOPAdapter
@@ -96,3 +105,43 @@ class TestCreateJWTs(AccessTokenMixin, TestCase):
         )
         self.assertDictContainsSubset(additional_claims, token_payload)
         self.assertEqual(user_email_verified, token_payload['email_verified'])
+        self.assertEqual([], token_payload['roles'])
+
+    def test_get_enterprise_roles(self):
+        """
+        _get_enterprise_roles should return the proper list of role strings
+        based on the SystemWideEnterpriseUserRoleAssignment objects that exist
+        for a given user.
+        """
+        ent_cust_uuid = uuid4()
+        ent_cust = EnterpriseCustomer.objects.create(
+            uuid=ent_cust_uuid,
+            site_id=settings.SITE_ID,
+        )
+        EnterpriseCustomerUser.objects.create(
+            user_id=self.user.id,
+            enterprise_customer=ent_cust,
+        )
+        for i in range(3):
+            role = SystemWideEnterpriseRole.objects.create(
+                name='enterprise-admin-{}'.format(i)
+            )
+            SystemWideEnterpriseUserRoleAssignment.objects.create(
+                user=self.user,
+                role=role,
+            )
+
+        actual_roles = set(jwt_api._get_enterprise_roles(self.user))
+        expected_roles = set([
+            'enterprise-admin-0:{}'.format(ent_cust_uuid),
+            'enterprise-admin-1:{}'.format(ent_cust_uuid),
+            'enterprise-admin-2:{}'.format(ent_cust_uuid),
+        ])
+        self.assertEqual(actual_roles, expected_roles)
+
+    def test_get_enterprise_roles(self):
+        """
+        _get_enterprise_roles should return an empty list of there is no
+        enterprise customer associated with the user.
+        """
+        self.assertEqual(jwt_api._get_enterprise_roles(self.user), [])

@@ -3,8 +3,11 @@ import json
 from time import time
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from jwkest import jwk
 from jwkest.jws import JWS
+
+from enterprise.models import EnterpriseCustomerUser, SystemWideEnterpriseUserRoleAssignment
 
 from edx_django_utils.monitoring import set_custom_metric
 from openedx.core.djangoapps.oauth_dispatch.toggles import ENFORCE_JWT_SCOPES
@@ -116,10 +119,44 @@ def _create_jwt(
         'filters': filters or [],
         'is_restricted': is_restricted,
         'email_verified': user.is_active,
+        'roles': _get_role_auth_claim_for_user(user),
     }
     payload.update(additional_claims or {})
     _update_from_additional_handlers(payload, user, scopes)
     return _encode_and_sign(payload, use_asymmetric_key, secret)
+
+def _get_role_auth_claim_for_user(user):
+    """
+    Returns a list of strings containing role data about the user.
+    """
+    role_auth_claim = []
+    role_auth_claim.extend(_get_enterprise_roles(user))
+    return role_auth_claim
+
+def _get_enterprise_roles(user):
+    """
+    Returns a list of enterprise roles.
+    """
+    ent_roles = []
+
+    try:
+        enterprise_user = EnterpriseCustomerUser.objects.get(user_id=user.id)
+    except ObjectDoesNotExist:
+        return ent_roles
+    enterprise_customer_uuid = enterprise_user.enterprise_customer.uuid
+
+    roles = SystemWideEnterpriseUserRoleAssignment.objects.filter(
+        user=user
+    ).select_related('role').values_list('role__name', flat=True)
+
+    for role in roles:
+        role_string = '{role}:{enterprise_customer_uuid}'.format(
+            role=role,
+            enterprise_customer_uuid=enterprise_customer_uuid,
+        )
+        ent_roles.append(role_string)
+
+    return ent_roles
 
 
 def _get_use_asymmetric_key_value(is_restricted, use_asymmetric_key):
