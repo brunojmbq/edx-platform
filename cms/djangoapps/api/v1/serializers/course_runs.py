@@ -1,4 +1,5 @@
 import six
+import time
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils.translation import ugettext_lazy as _
@@ -173,6 +174,16 @@ class CourseRunRerunSerializer(CourseRunSerializerCommonFieldsMixin, CourseRunTe
         return value
 
     def update(self, instance, validated_data):
+        def _execute_method_and_log_time(func, *args):
+            """
+            Call func passed in method with logging the time it took to complete.
+            Temporarily added for EDUCATOR-4013, we will remove this once we get the required information.
+            """
+            start_time = time.time()
+            output = func(*args)
+            log.info('[%s] [%s] completed in [%f]', func.__name__, args[1], (time.time() - start_time))
+            return output
+
         course_run_key = instance.id
         _id = validated_data.pop('id')
         team = validated_data.pop('team', [])
@@ -181,8 +192,27 @@ class CourseRunRerunSerializer(CourseRunSerializerCommonFieldsMixin, CourseRunTe
             'display_name': instance.display_name
         }
         fields.update(validated_data)
-        new_course_run_key = rerun_course(user, course_run_key, course_run_key.org, course_run_key.course, _id['run'],
-                                          fields, background=False)
+        if "MITx+7.00x" in course_run_key:
+            new_course_run_key = _execute_method_and_log_time(
+                rerun_course,
+                user,
+                course_run_key,
+                course_run_key.org,
+                course_run_key.course,
+                _id['run'],
+                fields,
+                background=False
+            )
+        else:
+            new_course_run_key = rerun_course(
+                user,
+                course_run_key,
+                course_run_key.org,
+                course_run_key.course,
+                _id['run'],
+                fields,
+                background=False
+            )
 
         course_run = get_course_and_check_access(new_course_run_key, user)
         self.update_team(course_run, team)
