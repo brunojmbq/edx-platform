@@ -173,7 +173,7 @@ class ProblemTypeA11yTestMixin(object):
 
         self.problem_page.a11y_audit.config.set_rules({
             "ignore": [
-                'label-title-only''
+                'label-title-only',
             ]
         })
         # Set the scope to the problem container
