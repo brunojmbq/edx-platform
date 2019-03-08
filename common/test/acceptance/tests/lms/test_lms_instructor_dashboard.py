@@ -116,6 +116,9 @@ class BulkEmailTest(BaseInstructorDashboardTest):
         self.send_email_page.a11y_audit.config.set_rules({
             "ignore": [
                 'button-name',  # TODO: TNL-5830
+                'aria-allow-role',
+                'color-contrast',
+                'listitem'
             ]
         })
         self.send_email_page.a11y_audit.check_for_accessibility_errors()
@@ -1114,7 +1117,12 @@ class CertificatesTest(BaseInstructorDashboardTest):
         """
         Certificates page accessibility tests
         """
-        self.certificates_section.a11y_audit.config.set_scope([
+        self.certificates_section.a11y_audit.config.set_rules({
+            "ignore": [
+                'aria-hidden-focus'
+            ]
+        })
+        self.certificates_section.config.set_scope([
             '.certificates-wrapper'
         ])
         self.certificates_section.a11y_audit.check_for_accessibility_errors()
