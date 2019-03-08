@@ -436,7 +436,6 @@ def get_country_time_zones(country_code=None):
         return _get_sorted_time_zone_list(common_timezones)
 
 
-
 def _get_sorted_time_zone_list(time_zone_list):
     """
     Returns a list of time zone dictionaries sorted by their display values
